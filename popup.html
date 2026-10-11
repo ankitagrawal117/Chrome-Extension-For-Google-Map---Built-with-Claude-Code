@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Maps Listings Collector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="20" height="20">
+    <h1>Maps Listings Collector</h1>
+  </header>
+
+  <form id="form" autocomplete="off">
+    <label>City
+      <input id="city" type="text" placeholder="e.g. Pune" required>
+    </label>
+    <label>Category
+      <input id="category" type="text" placeholder="e.g. Dermatologist" required>
+    </label>
+    <label>Areas <span class="hint">(optional, one per line)</span>
+      <textarea id="areas" rows="4" placeholder="Kothrud&#10;Baner&#10;Viman Nagar"></textarea>
+    </label>
+  </form>
+
+  <div class="buttons">
+    <button id="start" class="primary">Start</button>
+    <button id="pause" disabled>Pause</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+
+  <div id="prompt" class="prompt" hidden>
+    <p id="promptText"></p>
+    <div class="prompt-buttons" id="promptButtons"></div>
+  </div>
+
+  <section class="status">
+    <div class="status-row">
+      <span id="badge" class="badge idle">Idle</span>
+      <span id="progress">No run yet</span>
+    </div>
+    <div id="detail" class="detail"></div>
+    <div id="message" class="message" hidden></div>
+  </section>
+
+  <div class="buttons">
+    <button id="download" class="primary" disabled>Download CSV</button>
+    <button id="clear" class="link" disabled>Clear data</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

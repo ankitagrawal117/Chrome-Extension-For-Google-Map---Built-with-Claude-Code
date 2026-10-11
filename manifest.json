@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Maps Listings Collector",
+  "version": "1.0.0",
+  "description": "Collect business listings (name, phone, area, rating, reviews) from Google Maps for a city and category, and export them to CSV.",
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["https://www.google.com/maps/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/maps/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Maps Listings Collector",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
