@@ -1,197 +1,216 @@
 # Maps Listings Collector (Chrome extension)
 
 Collects business listings from Google Maps for a city + category (optionally
-split by locality) and exports them as one CSV file.
+split by locality) and exports one Excel (.xlsx) file ready for a bulk
+messaging tool.
 
-Manifest V3, plain JavaScript, no build step, no dependencies.
+Manifest V3, plain JavaScript, no build step, nothing loaded from a CDN.
+SheetJS is vendored as `lib/xlsx.full.min.js`.
 
-| Column | Source |
-|---|---|
-| Name | Result card / detail panel title |
-| Phone | Detail panel (`button[data-item-id^="phone:tel:"]`), blank if absent |
-| Area | Parsed from the address (see below) |
-| Address | Detail panel (`button[data-item-id="address"]`) |
-| Rating, Review Count | Result card's star label; detail panel header as fallback |
-| Google Maps URL | The listing's place link (query string stripped) |
-| Search Query | The search that first found the listing |
-| Also Found By | Other searches (areas) that returned the same place |
-| Searched Area, City, Category, Collected At | Run metadata |
+## The Excel file
+
+`<category>_<city>_<YYYY-MM-DD>.xlsx`, two sheets:
+
+**Listings**: columns in this order:
+
+| # | Column | Notes |
+|---|---|---|
+| 1 | Name | Trimmed, whitespace/line breaks collapsed |
+| 2 | Phone | Exactly 10 digits as a **text** cell (column format `@`), or blank |
+| 3 | Area | Address segment just before the city name; fallback: the area searched |
+| 4 | Rating | Number, e.g. `4.5`; blank if none |
+| 5 | Reviews | Integer; blank if none |
+| 6 | Address | Full address from the detail panel |
+| 7 | Maps URL | Place link (query string stripped) |
+
+**Valid Numbers Only**: just `Name` + `Phone` for rows whose phone is a valid
+10-digit mobile number (starts with 6–9). Upload this sheet directly.
+
+Both sheets have a bold, frozen header row, an autofilter and set column widths.
+
+### Phone rules
+
+For each listing, every phone number shown in its Maps detail panel is stored
+as-is. Normalisation happens when you export (and for the live counter), in
+`phone.js`:
+
+1. Split a field holding several numbers on `/ , ; |` or "or".
+2. For each number, strip all non-digits. 12 digits starting with `91` → drop
+   `91`. 11 digits starting with `0` → drop `0`. Keep it only if exactly 10
+   digits remain.
+3. Use the first valid number. With **Mobile numbers only** ON (default),
+   numbers not starting with 6/7/8/9 (landlines, after their leading 0 is
+   dropped) are skipped. A listing with only a landline is kept with a blank
+   Phone.
+4. Never write partial/invalid numbers: anything else gives a blank cell.
+5. Rows are de-duplicated by phone (first occurrence wins), and rows without a
+   phone by Maps URL, so the same number never appears twice.
+
+| Input | Mobile only ON | OFF |
+|---|---|---|
+| `+91 98765 43210` | `9876543210` | `9876543210` |
+| `098765 43210` | `9876543210` | `9876543210` |
+| `098765-43210` | `9876543210` | `9876543210` |
+| `(020) 2567 1234` | blank | `2025671234` |
+| `98765 43210 / 98765 43211` | `9876543210` | `9876543210` |
+| `1800 123 4567` | blank | blank |
+| `9876543210` | `9876543210` | `9876543210` |
+
+The checkbox only changes the export, not the collection, so you can toggle
+it after a run and download again.
 
 ## Install (load unpacked)
 
 1. Download or clone this folder.
-2. Open `chrome://extensions` in Chrome (or Edge/Brave).
+2. Open `chrome://extensions`.
 3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and select this folder (the one containing `manifest.json`).
-5. Pin the extension from the puzzle-piece menu so the popup is one click away.
+4. Click **Load unpacked** and select this folder (the one with `manifest.json`).
+5. Pin the extension from the puzzle-piece menu.
 
-After editing any file, click the reload icon on the extension's card in
-`chrome://extensions`, then reload any open Google Maps tab.
+After editing files, click the reload icon on the extension's card, then reload
+any open Google Maps tab.
 
 ## Usage
 
 1. Click the extension icon.
-2. Enter **City** (e.g. `Pune`) and **Category** (e.g. `Dermatologist`).
-3. Optional: list **Areas**, one per line (e.g. `Kothrud`, `Baner`). One
-   search runs per area: `Dermatologist in Kothrud, Pune`. With no areas a
-   single search `Dermatologist in Pune` runs.
-4. Click **Start**. The extension reuses the current Google Maps tab (or any
-   open Maps tab), or opens one. It never opens more than one.
-5. Watch the progress line (`Area 3/12 · 87 listings collected`). You can close
-   the popup; the run continues and every listing is saved immediately.
-6. **Pause** / **Resume** and **Stop** work at any time. Stop keeps the data.
-7. **Download CSV** is enabled as soon as one listing exists. The file is named
-   `<category>_<city>_<YYYY-MM-DD>.csv`.
+2. Enter **City** (`Pune`) and **Category** (`Dermatologist`).
+3. Optional: **Areas**, one per line (`Kothrud`, `Baner`, …). One search per
+   area: `Dermatologist in Kothrud, Pune`. With no areas: `Dermatologist in Pune`.
+4. Leave **Mobile numbers only** ticked for WhatsApp/SMS campaigns.
+5. Click **Start**. The extension reuses the current Google Maps tab (or any
+   open one), or opens one. It never opens more than one.
+6. Progress shows `Area 3/12 · 87 listings · 61 valid numbers` (counts after
+   phone de-duplication). The popup can be closed; every listing is saved
+   immediately.
+7. **Pause** / **Resume** and **Stop** work at any time. Stop keeps the data.
+8. **Download Excel** is enabled as soon as one listing exists.
 
-When previous data exists, **Start** asks whether to:
-- **Resume** the unfinished run (continues at the area where it stopped and
-  skips places already collected),
-- **New search, keep data** (adds to the existing rows, de-duplicated), or
-- **Clear data & start new**.
+If data from an earlier run exists, **Start** offers: **Resume** the unfinished
+run (continues at its area and skips places already collected), **New search,
+keep data**, or **Clear data & start new**. **Clear data** deletes everything.
 
-**Clear data** (below the download button) deletes everything collected.
-
-### Messages you may see
+### Messages
 
 | Message | What to do |
 |---|---|
-| *Google is showing a consent or CAPTCHA page…* | Switch to the Maps tab, accept/solve it manually, then click **Resume**. |
-| *The run tab is not on Google Maps any more…* | You navigated the run tab elsewhere. Click **Resume** to go back. |
-| *The Google Maps tab was closed…* | Click **Resume**; a new Maps tab opens and the current area is redone (collected places are skipped). |
-| *No results found for "…"* | That area returned nothing; the run moves on to the next area. |
-| *Could not talk to the Google Maps tab…* | Reload the Maps tab, then **Resume**. |
+| *Google is showing a consent or CAPTCHA page…* | Go to the Maps tab, solve/accept it manually, click **Resume**. |
+| *The run tab is not on Google Maps any more…* | Click **Resume** to go back. |
+| *The Google Maps tab was closed…* | Click **Resume**; a new tab opens and the area is redone (collected places skipped). |
+| *No results found for "…"* | That search returned nothing; the run moves on. |
+| *The extension was reloaded / Chrome was restarted…* | Click **Resume**. |
+| *Could not talk to the Google Maps tab…* | Reload the Maps tab, click **Resume**. |
 
 ## How it works
 
-- `background.js` (service worker) owns the run state machine, the single Maps
-  tab and every write to `chrome.storage.local` (serialised through a queue,
-  so concurrent messages cannot overwrite each other). State lives in storage,
-  not memory, so it survives the worker being shut down. A `kick()` routine runs
-  whenever the worker wakes up (any message, opening the popup) and restarts a
-  step that stalled while it slept.
-- `content.js` runs on `https://www.google.com/maps/*`. For each area it waits
-  for the results feed, scrolls it until *"You've reached the end of the list"*
-  (or 6 scrolls with no new cards), snapshots the cards as plain data (no
-  element references kept), then for each card re-finds the link by its URL,
-  clicks it, waits until the URL carries that place's ID **and** the panel
-  with that name has rendered, and reads phone/address/rating.
-- Before every click and during every delay the content script checks the
-  run status in storage, so Pause/Stop take effect within about a second.
-- Delays: 800–2000 ms (random) between listings, 4–8 s between area searches.
-- De-duplication: by Google's place feature ID from the URL
-  (`!1s0x…:0x…`), falling back to name + phone digits. Duplicates found by
-  another area's search are recorded in **Also Found By**.
-- Searches append `?hl=en` so on-page text (end-of-list marker, labels) is in
-  English regardless of your Google language.
+| File | Role |
+|---|---|
+| `background.js` | Service worker. Run state machine, the single Maps tab, all storage writes (serialised through a queue). State lives in `chrome.storage.local`, so the worker can be shut down at any time; `kick()` re-drives a stalled step whenever it wakes. |
+| `content.js` | Runs on `google.com/maps/*`. Per area: wait for the feed, scroll until "You've reached the end of the list" (or 6 scrolls with nothing new), snapshot the cards as plain data, then for each card re-find its link by URL, click it, wait until the URL carries that place's ID *and* the named panel has rendered (or changed, for same-name chain branches), and read phone(s)/address/rating. |
+| `phone.js` | Phone normaliser (shared by popup and tests). |
+| `export.js` | Final rows (normalise + dedupe) and the .xlsx. |
+| `popup.*` | UI and commands. |
+| `lib/xlsx.full.min.js` | SheetJS Community Edition 0.18.5 (Apache-2.0, see `lib/xlsx.LICENSE`). |
 
-### Area parsing
+- Pause/Stop: the content script checks run status before each click and during
+  every delay, so both take effect within about a second.
+- Delays: 800–2000 ms between listings, 4–8 s between area searches.
+- During collection places are de-duplicated by Google's place ID from the URL,
+  so a place found by several area searches is visited once.
+- Searches append `?hl=en` so the page text the script looks for is English.
+- SheetJS Community Edition cannot write bold fonts or column-level formats.
+  `export.js` builds the workbook with SheetJS and then patches its
+  `styles.xml`/sheet XML through SheetJS's bundled zip reader/writer
+  (`XLSX.CFB`). If that patch ever fails, the plain SheetJS file is used
+  instead. Phone cells are still text with format `@`; only the bold header,
+  column-wide format and frozen row are lost.
 
-The address is split on commas; a leading plus code, and trailing country,
-state, PIN code and city segments are removed; the last remaining segment is
-the area. If the area you searched for appears in the address, that name is
-used instead.
-`Shop 5, ABC Complex, Kothrud, Pune, Maharashtra 411038` → `Kothrud`.
+## Tests
 
-### CSV format
+```
+node tests/phone.test.js     # phone normaliser, all required cases
+node tests/export.test.js    # rows, dedupe, sheets, Phone = text "@" cells
+```
 
-- UTF-8 with BOM, CRLF line endings, every field quoted, `"` doubled, so
-  commas, quotes, newlines and Indian scripts open correctly in Excel.
-- Phone numbers are written as `="+91 98765 43210"` so Excel keeps them as
-  text (no `9.19877E+11`, leading zeros kept). Google Sheets and LibreOffice
-  handle this too.
-- Text cells starting with `=`, `+` or `@` are prefixed with `'` so they are
-  not evaluated as formulas.
+Or open `tests/test.html` in Chrome (drag the file into a tab) for the phone tests.
 
 ## Updating selectors when Google Maps changes
 
 All DOM knowledge is in the `SELECTORS`, `TEXT` and `TIMING` objects at the top
-of `content.js`. To fix a broken selector:
+of `content.js`.
 
-1. Open a Google Maps search, press F12, and use the element picker on the
-   part that stopped working (result link, phone row, address row…).
-2. Prefer stable hooks: `role`, `aria-label`, `data-item-id`. Avoid generated
-   class names where possible (`a.hfpxzc` is kept only as one alternative).
-3. Test in the DevTools console, e.g.
+1. Open a Maps search, press F12, use the element picker on what broke.
+2. Prefer `role`, `aria-label`, `data-item-id` over generated class names.
+3. Try it in the console, e.g.
    `document.querySelectorAll('div[role="feed"] a[href*="/maps/place/"]').length`.
-4. Update the entry, reload the extension in `chrome://extensions`, reload the
-   Maps tab.
+4. Update the entry, reload the extension, reload the Maps tab.
 
-| Key | What it must match |
+| Key | Must match |
 |---|---|
-| `feed` | The scrollable results list |
-| `resultLink` | One link per result card (its `aria-label` is the name, `href` the place URL) |
-| `detailPanel` | The place detail pane (its `aria-label` is the place name) |
-| `detailTitle` | Place name heading inside the pane |
-| `phoneButton`, `addressButton` | The phone / address rows in the pane |
+| `feed` | Scrollable results list |
+| `resultLink` | One link per result card (`aria-label` = name, `href` = place URL) |
+| `detailPanel` | Place detail pane (`aria-label` = place name) |
+| `detailTitle` | Name heading in the pane |
+| `phoneButton` | Phone row(s): `data-item-id="phone:tel:…"` |
+| `addressButton` | Address row: `data-item-id="address"` |
 | `overviewRow` | Any info row; ratings above the first one are the header rating |
-| `ratingImage` | Elements whose `aria-label` reads like `4.5 stars` |
+| `ratingImage` | Elements labelled like `4.5 stars` |
 | `blocked` | Consent / CAPTCHA forms |
 | `TEXT.endOfList`, `TEXT.noResults`, `TEXT.blocked` | English page texts |
 
-If panels are slow on your connection, increase `TIMING.panelTimeout` /
-`TIMING.panelFieldsTimeout`.
+Slow connection? Raise `TIMING.panelTimeout` / `TIMING.panelFieldsTimeout`.
 
 ## Known limits
 
-- Google Maps shows at most about 120 results per search. Split big cities
-  into areas to get more coverage.
+- Maps shows at most about 120 results per search; split big cities into areas.
 - Keep the Maps tab **visible** (its own window is best). Chrome throttles
-  timers in background tabs heavily after a few minutes, which slows the run
-  to a crawl.
-- Leave the map alone during a run. If "Update results when map moves" is on,
-  panning can replace the result list.
-- Expect roughly 2–4 seconds per listing plus scrolling; 500 listings ≈ 25–35
-  minutes.
-- Area parsing is heuristic and tuned for Indian address formats.
-- The rating comes from the result card; review counts written as "1.2K" are
-  converted to 1200 (approximate).
-- Heavy use can trigger Google's CAPTCHA. The run stops and waits for you.
-- Scraping may conflict with Google's Terms of Service. Use responsibly, at
-  low volume, for your own research.
-- Storage uses `chrome.storage.local` (10 MB): about 20,000 listings.
+  background tabs and the run slows to a crawl.
+- Don't move the map during a run. With "Update results when map moves" on,
+  the list can be replaced.
+- About 2–4 s per listing plus scrolling: 500 listings ≈ 25–35 minutes.
+- Phone rules are India-specific (10-digit numbers, `91`/`0` prefixes).
+- Area parsing depends on the city name appearing in the address; common
+  old/new names (Bangalore/Bengaluru, Bombay/Mumbai, Gurgaon/Gurugram, …) are
+  handled.
+- Rating/reviews come from the result card, falling back to the panel header.
+- Heavy use can trigger Google's CAPTCHA; the run stops and waits for you.
+- SheetJS 0.18.5 is the last release on npm. Its published advisories concern
+  *reading* untrusted spreadsheets; this extension only writes files.
+- Automated collection may conflict with Google's Terms of Service, and bulk
+  messaging is regulated (e.g. TRAI DND rules in India). Use responsibly.
+- `chrome.storage.local` holds 10 MB: about 20,000 listings.
 
 ## Manual test checklist
 
-**1. Small single search**
-- [ ] Load unpacked; no errors on the extension card.
-- [ ] City `Satara`, Category `Dermatologist`, no areas → Start.
-- [ ] A Maps tab opens (or the current one is reused); only one Maps tab.
-- [ ] Progress line shows `Area 1/1 · N listings collected` and increases.
-- [ ] The feed scrolls to "You've reached the end of the list".
-- [ ] Each listing is clicked in turn; status ends as **Done**.
-- [ ] Spot-check 5 rows against Maps: phone, address, rating, reviews.
+**1. Small city, narrow category**
+- [ ] Load unpacked: no errors on the extension card.
+- [ ] City `Satara`, Category `Dermatologist`, no areas, mobile only ✓ → Start.
+- [ ] One Maps tab is opened or reused; the feed scrolls to "end of the list".
+- [ ] Each listing is clicked in turn; progress increases; ends **Done**.
+- [ ] Spot-check 5 rows against Maps: phone, address, area, rating, reviews.
 
 **2. Area-split run**
 - [ ] City `Pune`, Category `Dermatologist`, Areas `Kothrud`, `Baner`, `Aundh`.
-- [ ] Searches run one after another with a pause between.
-- [ ] A clinic appearing in two areas is one row, with the second search in **Also Found By**.
-- [ ] Add a nonsense area (`Zzqx`) → "No results found" message, run continues.
+- [ ] Searches run one after another with a pause in between.
+- [ ] A clinic appearing in two areas is one row.
+- [ ] Add a nonsense area (`Zzqx`): "No results found" message, run continues.
 
 **3. Pause / resume / persistence**
-- [ ] Pause mid-area → count stops; Resume → continues from the next listing.
-- [ ] Close the popup during a run and reopen it → progress is still live.
-- [ ] Stop → Start → prompt offers **Resume** → run continues; already
-      collected places are not clicked again.
-- [ ] Close the Maps tab mid-run → status Paused with a message → Resume opens a new tab.
-- [ ] Reload the extension mid-run, reopen popup → data still there, Resume works.
+- [ ] Pause mid-area: counter stops. Resume: continues from the next listing.
+- [ ] Close and reopen the popup mid-run: progress still live.
+- [ ] Stop, then Start: **Resume** is offered; collected places aren't clicked again.
+- [ ] Close the Maps tab mid-run: Paused with a message; Resume opens a new tab.
+- [ ] Reload the extension mid-run, reopen popup: data kept, Resume works.
 
-**4. CSV in Excel**
-- [ ] Download → file named like `Dermatologist_Pune_2026-10-11.csv`.
-- [ ] Open by double-clicking in Excel: columns split correctly.
-- [ ] Phones show as text (`+91 98765 43210`, `020…` keeps the leading 0), not `9.19E+11`.
-- [ ] Names with commas, quotes, or Devanagari/Tamil text display correctly.
-- [ ] Download CSV is enabled once the first listing is collected.
-
-**5. Blocked page**
-- [ ] In a fresh profile (EU consent) or after a CAPTCHA, the run shows
-      *Action needed* with instructions; after solving, Resume continues.
-
-## Files
-
-```
-manifest.json   MV3 manifest (storage, tabs, scripting; host www.google.com/maps/*)
-background.js   Service worker: run state, tab control, storage writes
-content.js      Scraper (SELECTORS config at the top)
-popup.html/css/js  UI, commands, CSV export
-icons/          Placeholder icons (16/32/48/128)
-```
+**4. Excel file**
+- [ ] Download: file named like `Dermatologist_Pune_2026-10-12.xlsx`; opens without a repair prompt.
+- [ ] Sheets **Listings** and **Valid Numbers Only**; header bold and frozen.
+- [ ] Columns exactly: Name, Phone, Area, Rating, Reviews, Address, Maps URL.
+- [ ] **Phone shows full 10-digit text** (e.g. `9876543210`): no `9.88E+09`, no `+91`, no leading 0, no spaces.
+- [ ] Select a Phone cell → Format Cells shows **Text**; select the empty cell below the last row in column B → also **Text**.
+- [ ] Phone values left-aligned (text); a green "number stored as text" marker is fine.
+- [ ] No phone number appears twice in the Phone column.
+- [ ] Landline-only listings have a blank Phone with mobile-only ON; untick it, download again, landlines appear as 10 digits.
+- [ ] **Valid Numbers Only** contains only numbers starting 6–9.
+- [ ] Rating is numeric (can be averaged), Reviews is integer.
+- [ ] Names in Devanagari/Tamil etc. display correctly.
+- [ ] Upload **Valid Numbers Only** to your bulk messaging tool; numbers are accepted.

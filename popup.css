@@ -43,6 +43,8 @@ header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 h1 { font-size: 15px; margin: 0; font-weight: 600; }
 
 label { display: block; margin-bottom: 8px; font-weight: 500; }
+label.check { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+label.check input { width: auto; margin: 0; }
 .hint { color: var(--muted); font-weight: 400; }
 
 input, textarea {

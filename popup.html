@@ -21,6 +21,10 @@
     <label>Areas <span class="hint">(optional, one per line)</span>
       <textarea id="areas" rows="4" placeholder="Kothrud&#10;Baner&#10;Viman Nagar"></textarea>
     </label>
+    <label class="check">
+      <input id="mobileOnly" type="checkbox" checked>
+      Mobile numbers only (starts with 6, 7, 8 or 9)
+    </label>
   </form>
 
   <div class="buttons">
@@ -44,10 +48,13 @@
   </section>
 
   <div class="buttons">
-    <button id="download" class="primary" disabled>Download CSV</button>
+    <button id="download" class="primary" disabled>Download Excel</button>
     <button id="clear" class="link" disabled>Clear data</button>
   </div>
 
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="phone.js"></script>
+  <script src="export.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Phone normaliser tests</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 16px; }
+    td, th { padding: 3px 10px; text-align: left; font-family: ui-monospace, monospace; }
+    .pass { color: #188038; } .fail { color: #c5221f; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Phone normaliser tests</h1>
+  <p id="summary"></p>
+  <table id="out"><tr><th>Result</th><th>Mobile only</th><th>Input</th><th>Got</th><th>Expected</th></tr></table>
+  <script src="../phone.js"></script>
+  <script src="phone.cases.js"></script>
+  <script>
+    let failed = 0;
+    const table = document.getElementById('out');
+    for (const [input, mobile, any] of PHONE_CASES) {
+      for (const [mobileOnly, expected] of [[true, mobile], [false, any]]) {
+        const got = PhoneUtil.pickPhone(input, { mobileOnly });
+        const ok = got === expected;
+        if (!ok) failed++;
+        const tr = table.insertRow();
+        for (const v of [ok ? 'PASS' : 'FAIL', String(mobileOnly), JSON.stringify(input), JSON.stringify(got), JSON.stringify(expected)]) {
+          tr.insertCell().textContent = v;
+        }
+        tr.className = ok ? 'pass' : 'fail';
+      }
+    }
+    document.getElementById('summary').textContent = failed ? `${failed} failed` : 'All passed';
+    document.getElementById('summary').className = failed ? 'fail' : 'pass';
+  </script>
+</body>
+</html>

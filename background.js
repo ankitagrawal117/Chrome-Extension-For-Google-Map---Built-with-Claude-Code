@@ -423,7 +423,7 @@ async function onAreaDone(msg) {
       run.stage = null;
       if (run.status === 'running') run.status = 'done';
       run.message = run.lastAreaNote || '';
-      run.detail = `Finished. ${run.count} listings collected.`;
+      run.detail = "Finished. Download the Excel file below.";
       if (run.count === 0) run.message = 'No results found.';
       await saveRun(run);
       return { ok: true };

@@ -59,6 +59,7 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const rand = (min, max) => Math.floor(min + Math.random() * (max - min));
+  const cleanText = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
   const norm = (s) =>
     (s || '')
       .normalize('NFC')
@@ -139,30 +140,50 @@
   const COUNTRIES = /^(india|bharat|united states|usa|united kingdom|uk|uae|united arab emirates)$/i;
   const PLUS_CODE = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{0,3}\b/i;
 
+  const PIN = /\b\d{3}\s?\d{3}\b|\b\d{5}(-\d{4})?\b/g;
+  // Old/new city names, so "Bangalore" matches an address that says "Bengaluru".
+  const CITY_ALIASES = [
+    ['bangalore', 'bengaluru'], ['bombay', 'mumbai'], ['gurgaon', 'gurugram'], ['calcutta', 'kolkata'],
+    ['madras', 'chennai'], ['poona', 'pune'], ['mysore', 'mysuru'], ['trivandrum', 'thiruvananthapuram'],
+    ['vizag', 'visakhapatnam'], ['baroda', 'vadodara'], ['cochin', 'kochi'], ['new delhi', 'delhi'],
+  ];
+  function cityNames(city) {
+    const c = norm(city);
+    const names = new Set([c]);
+    for (const pair of CITY_ALIASES) if (pair.includes(c)) pair.forEach((n) => names.add(n));
+    return names;
+  }
+
+  // Area = the address segment just before the city name
+  // ("Shop 5, ABC Complex, Kothrud, Pune, Maharashtra 411038" → "Kothrud").
+  // Fallbacks: the searched area, then the last segment that is not
+  // city/state/PIN/country.
   function parseArea(address, city, searchedArea) {
-    if (!address) return searchedArea || '';
-    const addr = norm(address);
-    if (searchedArea && addr.includes(norm(searchedArea))) {
-      // The searched locality appears verbatim — that is the best answer.
-      return searchedArea;
-    }
-    let parts = address
+    const parts = String(address || '')
       .split(',')
-      .map((p) => p.replace(PLUS_CODE, '').trim())
+      .map((p) => p.replace(PLUS_CODE, '').replace(/\s+/g, ' ').trim())
       .filter(Boolean);
-    const cityN = norm(city);
-    while (parts.length > 1) {
-      const last = parts[parts.length - 1];
-      const stripped = last.replace(/\b\d{3}\s?\d{3}\b|\b\d{5}(-\d{4})?\b/g, '').trim();
+    const cities = cityNames(city);
+    for (let i = parts.length - 1; i > 0; i--) {
+      if (cities.has(norm(parts[i].replace(PIN, '')))) {
+        const before = parts[i - 1].replace(PIN, '').trim();
+        if (before && /\p{L}/u.test(before)) return before;
+        break;
+      }
+    }
+    if (searchedArea) return searchedArea;
+
+    const rest = parts.slice();
+    while (rest.length > 1) {
+      const stripped = rest[rest.length - 1].replace(PIN, '').trim();
       const s = norm(stripped);
-      if (!s || COUNTRIES.test(stripped) || STATES.has(s) || s === cityN) {
-        parts.pop();
+      if (!s || COUNTRIES.test(stripped) || STATES.has(s) || cities.has(s)) {
+        rest.pop();
         continue;
       }
-      parts[parts.length - 1] = stripped;
-      break;
+      return stripped;
     }
-    return parts.length ? parts[parts.length - 1] : '';
+    return '';
   }
 
   // -------------------------------------------------------------------------
@@ -184,7 +205,7 @@
 
   function readCard(anchor) {
     const root = cardRoot(anchor);
-    const name = (anchor.getAttribute('aria-label') || anchor.textContent || '').trim();
+    const name = cleanText(anchor.getAttribute('aria-label') || anchor.textContent);
     let rating = '';
     let reviews = '';
     for (const img of root.querySelectorAll(SELECTORS.ratingImage)) {
@@ -243,21 +264,22 @@
 
   function readPanel(panel) {
     const h1 = panel.querySelector(SELECTORS.detailTitle);
-    const name = ((h1 && h1.textContent) || panel.getAttribute('aria-label') || '').trim();
+    const name = cleanText((h1 && h1.textContent) || panel.getAttribute('aria-label'));
 
-    let phone = '';
-    const phoneEl = panel.querySelector(SELECTORS.phoneButton);
-    if (phoneEl) {
-      const label = (phoneEl.getAttribute('aria-label') || '').replace(TEXT.phonePrefix, '').trim();
-      const tel = (phoneEl.getAttribute('data-item-id') || '').replace(/^phone:tel:/, '').trim();
-      phone = label || phoneEl.textContent.trim() || tel;
+    // Every phone row, raw text; normalisation happens at export time.
+    const phones = [];
+    for (const el of panel.querySelectorAll(SELECTORS.phoneButton)) {
+      const label = (el.getAttribute('aria-label') || '').replace(TEXT.phonePrefix, '').trim();
+      const tel = (el.getAttribute('data-item-id') || '').replace(/^phone:tel:/, '').trim();
+      const v = label || el.textContent.trim() || tel;
+      if (v && !phones.includes(v)) phones.push(v);
     }
+    const phone = phones.join(' / ');
 
     let address = '';
     const addrEl = panel.querySelector(SELECTORS.addressButton);
     if (addrEl) {
-      address = (addrEl.getAttribute('aria-label') || '').replace(TEXT.addressPrefix, '').trim()
-        || addrEl.textContent.trim();
+      address = cleanText((addrEl.getAttribute('aria-label') || '').replace(TEXT.addressPrefix, '') || addrEl.textContent);
     }
 
     // Header rating / review count: only elements before the first overview
@@ -398,8 +420,8 @@
     const url = data.url || '';
     return {
       key: placeKey(url, data.name, data.phone),
-      name: data.name || '',
-      phone: data.phone || '',
+      name: cleanText(data.name),
+      phoneRaw: data.phone || '', // all numbers as shown; normalised at export
       area: parseArea(data.address, job.city, job.area),
       address: data.address || '',
       rating: data.rating === undefined ? '' : data.rating,
