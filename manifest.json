@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Maps Listings Collector",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Collect business listings (name, 10-digit phone, area, rating, reviews) from Google Maps for a city and category, and export them to Excel.",
   "permissions": [
     "storage",

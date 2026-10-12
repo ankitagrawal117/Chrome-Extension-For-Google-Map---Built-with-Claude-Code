@@ -109,7 +109,7 @@ keep data**, or **Clear data & start new**. **Clear data** deletes everything.
 | `phone.js` | Phone normaliser (shared by popup and tests). |
 | `export.js` | Final rows (normalise + dedupe) and the .xlsx. |
 | `popup.*` | UI and commands. |
-| `lib/xlsx.full.min.js` | SheetJS Community Edition 0.18.5 (Apache-2.0, see `lib/xlsx.LICENSE`). |
+| `lib/xlsx.full.min.js` | SheetJS Community Edition 0.18.5 (Apache-2.0, see `lib/xlsx.LICENSE`). Optional at runtime: if it is missing, `export.js` uses its built-in writer. |
 
 - Pause/Stop: the content script checks run status before each click and during
   every delay, so both take effect within about a second.
@@ -123,6 +123,24 @@ keep data**, or **Clear data & start new**. **Clear data** deletes everything.
   (`XLSX.CFB`). If that patch ever fails, the plain SheetJS file is used
   instead. Phone cells are still text with format `@`; only the bold header,
   column-wide format and frozen row are lost.
+
+### Built-in fallback writer
+
+`export.js` also contains a small dependency-free .xlsx writer (an
+uncompressed zip with the same sheets, bold frozen header, widths,
+autofilter, and Phone as `@` text). It is used when SheetJS is not loaded,
+for example if the `lib/` folder was not copied, or if SheetJS throws. The
+popup's DevTools console then logs `SheetJS (lib/xlsx.full.min.js) not
+loaded, using built-in writer`. Both paths are covered by
+`tests/export.test.js`.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| *Could not build the Excel file: Cannot read properties of null (reading 'utils')* | Fixed in 1.1.1: the export no longer depends on SheetJS being present. Update all files, keep the `lib/` folder, and click reload on the extension card. |
+| Popup shows an old version / old error | `chrome://extensions` → reload icon on the card, then close and reopen the popup. |
+| Want to see why something failed | Right-click inside the popup → **Inspect** → Console. |
 
 ## Tests
 
